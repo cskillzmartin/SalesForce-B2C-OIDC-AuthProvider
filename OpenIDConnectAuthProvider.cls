@@ -4,26 +4,26 @@ public with sharing class OpenIDConnectAuthProvider extends Auth.AuthProviderPlu
     /*  Required override - tie plug-in to its configuration metadata       */
     /* --------------------------------------------------------------------- */
     public String getCustomMetadataType() {
-        return 'OpenIDConnectAuthProviderConfig__mdt';
+        return 'B2C_OIDC_AuthProviderConfig__mdt';
     }
 
     /* --------------------------------------------------------------------- */
     /*  Cached configuration helper                                          */
     /* --------------------------------------------------------------------- */
-    private OpenIDConnectAuthProviderConfig__mdt cfg {
+    private B2C_OIDC_AuthProviderConfig__mdt cfg {
         get {
             if (cfg == null) {
                 // One-record convention keeps the plug-in stateless.
-                List<OpenIDConnectAuthProviderConfig__mdt> configs = [SELECT clientId__c, clientSecret__c, 
+                List<B2C_OIDC_AuthProviderConfig__mdt> configs = [SELECT clientId__c, clientSecret__c, 
                                authorizationEndpoint__c, tokenEndpoint__c, userInfoEndpoint__c,
                                redirectUri__c, scope__c, issuer__c
-                          FROM OpenIDConnectAuthProviderConfig__mdt
+                          FROM B2C_OIDC_AuthProviderConfig__mdt
                           WHERE DeveloperName = 'Default'
                           LIMIT 1];
                           
                 if (configs.isEmpty()) {
                     throw new Auth.AuthProviderPluginException(
-                        'OpenID Connect Auth Provider configuration not found. Please create a OpenIDConnectAuthProviderConfig__mdt record with DeveloperName = "Default"'
+                        'OpenID Connect Auth Provider configuration not found. Please create a B2C_OIDC_AuthProviderConfig__mdt record with DeveloperName = "Default"'
                     );
                 }
                 
@@ -106,7 +106,7 @@ public with sharing class OpenIDConnectAuthProvider extends Auth.AuthProviderPlu
 
             // Validate ID token if present
             if (String.isNotBlank(idToken)) {
-                validateJwtStructure(idToken);
+                validateJwtStructure(idToken, cfg.Issuer__c);
             }
 
             // Build token response for downstream methods.
@@ -267,7 +267,7 @@ public with sharing class OpenIDConnectAuthProvider extends Auth.AuthProviderPlu
     /* --------------------------------------------------------------------- */
     /*  Utility - Validate JWT structure and basic security properties       */
     /* --------------------------------------------------------------------- */
-    private static void validateJwtStructure(String jwt) {
+    private static void validateJwtStructure(String jwt, String expectedIssuer) {
         if (String.isBlank(jwt)) {
             throw new Auth.AuthProviderPluginException('JWT token is blank');
         }
@@ -288,10 +288,10 @@ public with sharing class OpenIDConnectAuthProvider extends Auth.AuthProviderPlu
         }
         
         // Validate issuer if configured
-        if (String.isNotBlank(cfg.Issuer__c) && claims.containsKey('iss')) {
+        if (String.isNotBlank(expectedIssuer) && claims.containsKey('iss')) {
             String issuer = (String)claims.get('iss');
-            if (!cfg.Issuer__c.equals(issuer)) {
-                throw new Auth.AuthProviderPluginException('JWT issuer mismatch. Expected: ' + cfg.Issuer__c + ', Got: ' + issuer);
+            if (!expectedIssuer.equals(issuer)) {
+                throw new Auth.AuthProviderPluginException('JWT issuer mismatch. Expected: ' + expectedIssuer + ', Got: ' + issuer);
             }
         }
     }
@@ -397,7 +397,7 @@ public with sharing class OpenIDConnectAuthProvider extends Auth.AuthProviderPlu
         } else if (claimValue instanceof Long) {
             return (Long)claimValue;
         } else if (claimValue instanceof Integer) {
-            return ((Integer)claimValue).longValue();
+            return (Long)((Integer)claimValue);
         }
         return 0L;
     }
